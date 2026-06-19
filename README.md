@@ -23,7 +23,7 @@ PromptGuard is that tool — an open-source MCP server you can point at any LLM 
 
 * ✅ Core Pydantic schemas (`AttackPrompt`, `AttackResult`, `RedteamReport`, etc.)
 * ✅ LLM adapter layer (Anthropic, OpenAI, generic HTTP)
-* ✅ Attack corpus: **70 hand-curated adversarial prompts** across LLM01, LLM02, LLM06, LLM08
+* ✅ Attack corpus: **200 hand-curated adversarial prompts** (50 per category) across LLM01, LLM02, LLM06, LLM08
 * ✅ Static tools: `audit_prompt` and `check_injection`
 * ✅ Three-tier classifier (signal → LLM-judge → refusal-heuristic)
 * ✅ **`redteam_endpoint`** — full live red-team orchestration against any HTTP chat endpoint
@@ -32,11 +32,10 @@ PromptGuard is that tool — an open-source MCP server you can point at any LLM 
 * ✅ Working CLI: `version`, `corpus-stats`, `audit-prompt`, `check-input`, `audit <url>`, `serve`
 * ✅ **MCP server (`promptguard serve`)** — exposes 5 tools (`audit_prompt`, `check_injection`,
   `corpus_stats`, `list_attacks`, `redteam_endpoint`) over the Model Context Protocol
-* ✅ 65-test suite — all passing, ruff-clean
+* ✅ 73-test suite — all passing, ruff-clean
 
 **Not yet shipped:**
 
-* ❌ Corpus expansion from 70 to 200 prompts (the v0.1.0 ship target)
 * ❌ Phase 6: Polish, demo GIF, PyPI release
 
 ## Install
@@ -176,7 +175,7 @@ promptguard/
 
 ## The corpus
 
-Phase-1 ships **20 starter prompts** across four OWASP categories. The target for v0.1.0 is **50 per category (200 total)**. The starter set illustrates every technique category — instruction override, role-play framing, payload smuggling, indirect injection, encoding tricks, authority impersonation, delimiter attacks, language switching.
+The corpus now ships **200 prompts — 50 per OWASP category**, meeting the v0.1.0 target. It spans a wide technique surface: instruction override, role-play and hypothetical framing, payload smuggling and indirect injection, encoding/obfuscation tricks, authority impersonation, delimiter and JSON-field attacks, many-shot conditioning, XSS/SQL/shell/SSTI/SSRF output payloads, system-prompt and RAG-source extraction, and destructive/agentic tool abuse.
 
 To contribute a prompt, add a YAML entry to `src/promptguard/corpus/llm0X_<category>.yaml`. The schema is enforced by `AttackPrompt` in `models.py` — tests will fail loudly if an entry is malformed.
 
@@ -186,7 +185,7 @@ To contribute a prompt, add a YAML entry to `src/promptguard/corpus/llm0X_<categ
 |-------|-------------|--------|
 | 0 | Scaffolding, CI, pyproject | ✅ |
 | 1 | Models, adapters, corpus loader, static tools, classifier | ✅ |
-| 2 | Corpus expansion (70 prompts; target 200) | 🟡 partial |
+| 2 | Corpus expansion (200 prompts, 50/category) | ✅ |
 | 3 | `redteam_endpoint` tool — full orchestration | ✅ |
 | 4 | Adaptive mutation engine (7 techniques, meta-LLM-driven) | ✅ |
 | 5 | MCP server + `promptguard serve` | ✅ |

@@ -1,8 +1,10 @@
 # PromptGuard — Next Plan (v0.1.0 → v1.0)
 
-> Status at time of writing (2026-06-20): Phases 0–5 complete. The MCP server
-> ships (`promptguard serve`, 5 tools). Corpus is 70 prompts. 65 tests, ruff-clean.
-> This document is the roadmap for what comes next. **It is a plan, not yet applied.**
+> Status at time of writing (2026-06-20): Phases 0–5 complete and the MCP server
+> ships (`promptguard serve`, 5 tools). **Workstream A1 below is now DONE** — the
+> corpus has reached 200 prompts (50 per category) with a corpus-quality test gate.
+> 73 tests, ruff-clean. The remaining workstreams are the roadmap for what comes
+> next. **They are a plan, not yet applied.**
 
 The goal of this plan is to take PromptGuard from "working alpha that an early
 adopter can clone" to "the obvious tool you reach for to red-team an LLM app,
@@ -17,14 +19,18 @@ done-bar. A recommended sequencing follows at the end.
 The single highest-leverage gap. Everything else is more valuable once the tool
 is `pip install`-able and the corpus is credible.
 
-**A1. Corpus expansion: 70 → 200 prompts.**
-- Reach the stated target of 50 prompts per OWASP category across the four files
-  in `src/promptguard/corpus/`.
-- Every new entry cites a `references` source and has a documented
-  `success_signal`. Keep the per-file category invariant the loader enforces.
-- Add `tests/test_corpus_quality.py`: assert ≥50 per category, no duplicate ids,
-  every entry has ≥1 reference, every `substring`/`regex` signal is non-empty.
-- *Done-bar:* `promptguard corpus-stats` shows 200 total; quality test green.
+**A1. Corpus expansion: 70 → 200 prompts. ✅ DONE (2026-06-20).**
+- Reached 50 prompts per OWASP category across the four files in
+  `src/promptguard/corpus/` (200 total). New techniques added across all four
+  categories (hypothetical framing, many-shot, SSTI/SSRF/CSV/LDAP/NoSQL output
+  payloads, RAG-source and memory extraction, payment redirection, supply-chain
+  and infrastructure abuse, etc.).
+- Added `tests/test_corpus_quality.py`: asserts ≥50 per category, unique ids,
+  canonical id format, non-empty concrete signals, `llm_judge` sentinel
+  consistency, and unique prompt bodies.
+- *Done:* `promptguard corpus-stats` shows 200 total; quality test green.
+- *Deferred refinement:* not every entry cites a `references` URL yet (existing
+  entries didn't either); a follow-up pass can raise reference coverage.
 
 **A2. PyPI release.**
 - Verify the hatchling build (`uv build`), test-install the wheel in a clean venv,
