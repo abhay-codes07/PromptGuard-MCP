@@ -1,0 +1,93 @@
+name: PromptGuard Red-Team
+description: >-
+  Red-team a live LLM chat endpoint against the OWASP LLM Top-10 and fail the
+  build on a vulnerability regression. Optionally upload SARIF to code scanning.
+author: Abhay Singh
+branding:
+  icon: shield
+  color: red
+
+inputs:
+  url:
+    description: Target chat endpoint URL (receives a JSON POST).
+    required: true
+  auth:
+    description: "Value for the Authorization header, e.g. 'Bearer ${{ secrets.TARGET_TOKEN }}'."
+    required: false
+    default: ""
+  response-path:
+    description: Dotted path to the assistant text in the JSON response.
+    required: false
+    default: choices.0.message.content
+  max-score:
+    description: >-
+      Fail the build (exit 3) if any OWASP category score exceeds this 0-100
+      threshold. Higher score = more vulnerable.
+    required: false
+    default: "30"
+  max-attacks:
+    description: Cap the run at N attacks. Empty = full corpus.
+    required: false
+    default: ""
+  concurrency:
+    description: Max concurrent in-flight attacks.
+    required: false
+    default: "5"
+  formats:
+    description: "Comma-separated report formats: json, markdown, sarif."
+    required: false
+    default: json,markdown,sarif
+  out-dir:
+    description: Directory to write reports into.
+    required: false
+    default: promptguard-reports
+  upload-sarif:
+    description: Upload the SARIF report to GitHub code scanning.
+    required: false
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Install uv
+      uses: astral-sh/setup-uv@v3
+      with:
+        version: latest
+
+    - name: Run PromptGuard red-team
+      id: redteam
+      shell: bash
+      env:
+        PG_URL: ${{ inputs.url }}
+        PG_AUTH: ${{ inputs.auth }}
+        PG_RESPONSE_PATH: ${{ inputs.response-path }}
+        PG_MAX_SCORE: ${{ inputs.max-score }}
+        PG_MAX_ATTACKS: ${{ inputs.max-attacks }}
+        PG_CONCURRENCY: ${{ inputs.concurrency }}
+        PG_FORMATS: ${{ inputs.formats }}
+        PG_OUT: ${{ inputs.out-dir }}
+      run: |
+        args=( "$PG_URL"
+               --response-path "$PG_RESPONSE_PATH"
+               --concurrency "$PG_CONCURRENCY"
+               --format "$PG_FORMATS"
+               --out "$PG_OUT"
+               --max-score "$PG_MAX_SCORE" )
+        if [ -n "$PG_AUTH" ]; then args+=( --auth "$PG_AUTH" ); fi
+        if [ -n "$PG_MAX_ATTACKS" ]; then args+=( --max-attacks "$PG_MAX_ATTACKS" ); fi
+        # Run from the action's own checkout so the package is available.
+        uvx --from "promptguard @ ${{ github.action_path }}" promptguard audit "${args[@]}"
+
+    - name: Upload SARIF to code scanning
+      if: ${{ always() && inputs.upload-sarif == 'true' }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ inputs.out-dir }}/report.sarif
+
+    - name: Upload report artifacts
+      if: ${{ always() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: promptguard-reports
+        path: ${{ inputs.out-dir }}
+        if-no-files-found: ignore

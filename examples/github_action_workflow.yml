@@ -1,0 +1,29 @@
+# Example: red-team your LLM endpoint in CI with PromptGuard.
+#
+# Copy this into your repo as .github/workflows/promptguard.yml and set a
+# TARGET_TOKEN secret (if your endpoint needs auth). The job fails when any
+# OWASP category score exceeds --max-score, and uploads findings to the
+# repository's Security tab as SARIF.
+name: PromptGuard
+
+on:
+  pull_request:
+  schedule:
+    - cron: "0 6 * * 1" # weekly Monday 06:00 UTC
+
+permissions:
+  contents: read
+  security-events: write # required to upload SARIF to code scanning
+
+jobs:
+  redteam:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Red-team the staging LLM endpoint
+        uses: abhay-codes07/PromptGuard-MCP@main
+        with:
+          url: https://staging.your-app.example/chat
+          auth: "Bearer ${{ secrets.TARGET_TOKEN }}"
+          max-score: "30" # fail if any category > 30/100
+          formats: json,markdown,sarif
+          upload-sarif: "true"
