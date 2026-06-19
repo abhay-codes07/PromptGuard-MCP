@@ -56,8 +56,8 @@ def corpus_stats_command() -> None:
     table.add_row("[bold]Total[/bold]", f"[bold]{stats['total']}[/bold]")
     console.print(table)
     console.print(
-        "\n[dim]Target for v0.1.0 ship: 50 per category (200 total). "
-        "Add entries to corpus/llm*.yaml.[/dim]"
+        "\n[dim]v0.1.0 ship target met: 50 per category (200 total). "
+        "Contribute more via corpus/llm*.yaml.[/dim]"
     )
 
 
