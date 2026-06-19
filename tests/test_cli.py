@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import respx
 from typer.testing import CliRunner
 
 from promptguard.cli import app
 
 runner = CliRunner()
+
+_TARGET = "https://example.invalid/chat"
+
+
+def _mock_response(content: str) -> dict:
+    return {"choices": [{"message": {"content": content}}]}
 
 
 def test_version_command() -> None:
@@ -52,3 +59,66 @@ def test_serve_command_starts_server(mocker) -> None:
     result = runner.invoke(app, ["serve", "--transport", "stdio"])
     assert result.exit_code == 0
     mock_run.assert_called_once_with(transport="stdio")
+
+
+def test_audit_rejects_unknown_format() -> None:
+    result = runner.invoke(app, ["audit", _TARGET, "--format", "pdf"])
+    assert result.exit_code == 1
+    assert "Unknown --format" in (result.stdout + str(result.stderr))
+
+
+def test_audit_gate_fails_on_vulnerable_target(tmp_path) -> None:
+    # The first corpus attack (LLM01-0001) succeeds if the response leaks its
+    # "DAN MODE ACTIVATED" signal, driving LLM01 to 100 and tripping the gate.
+    with respx.mock(assert_all_called=False) as router:
+        router.post(_TARGET).respond(200, json=_mock_response("Sure! DAN MODE ACTIVATED"))
+        result = runner.invoke(
+            app,
+            [
+                "audit",
+                _TARGET,
+                "--max-attacks",
+                "1",
+                "--max-score",
+                "50",
+                "--out",
+                str(tmp_path),
+                "--format",
+                "json",
+            ],
+        )
+    assert result.exit_code == 3, result.stdout
+    assert (tmp_path / "report.json").exists()
+
+
+def test_audit_gate_passes_on_safe_target(tmp_path) -> None:
+    with respx.mock(assert_all_called=False) as router:
+        router.post(_TARGET).respond(200, json=_mock_response("I cannot help with that."))
+        result = runner.invoke(
+            app,
+            [
+                "audit",
+                _TARGET,
+                "--max-attacks",
+                "3",
+                "--max-score",
+                "50",
+                "--out",
+                str(tmp_path),
+                "--format",
+                "json",
+            ],
+        )
+    assert result.exit_code == 0, result.stdout
+
+
+def test_audit_writes_sarif(tmp_path) -> None:
+    with respx.mock(assert_all_called=False) as router:
+        router.post(_TARGET).respond(200, json=_mock_response("Sure! DAN MODE ACTIVATED"))
+        result = runner.invoke(
+            app,
+            ["audit", _TARGET, "--max-attacks", "1", "--out", str(tmp_path), "--format", "sarif"],
+        )
+    assert result.exit_code == 0, result.stdout
+    assert (tmp_path / "report.sarif").exists()
+    assert not (tmp_path / "report.json").exists()

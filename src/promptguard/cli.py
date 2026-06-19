@@ -170,23 +170,45 @@ def audit(
         "--judge/--no-judge",
         help="Use a separate LLM to classify fuzzy attacks. Requires ANTHROPIC_API_KEY.",
     ),
-    out_dir: Path = typer.Option(
-        Path("reports"), "--out", help="Output directory for JSON + Markdown reports."
+    out_dir: Path = typer.Option(Path("reports"), "--out", help="Output directory for reports."),
+    output_format: str = typer.Option(
+        "json,markdown",
+        "--format",
+        help="Comma-separated report formats: json, markdown, sarif.",
+    ),
+    max_score: int | None = typer.Option(
+        None,
+        "--max-score",
+        help=(
+            "CI gate: exit non-zero (code 3) if ANY OWASP category score exceeds this "
+            "0-100 threshold. Higher score = more vulnerable. Omit to never fail."
+        ),
     ),
 ) -> None:
     """Run the full red-team against a live HTTP LLM endpoint.
 
     Sends the corpus of adversarial prompts to the URL, classifies each
-    response, and writes JSON + Markdown reports.
+    response, and writes reports in the requested formats. With --max-score it
+    doubles as a CI gate that fails the build on a vulnerability regression.
     """
     import asyncio
 
     from promptguard.adapters.http import HTTPAdapter
     from promptguard.engine.adaptive import AdaptiveEngine
-    from promptguard.reporting import write_json_report, write_markdown_report
+    from promptguard.reporting import (
+        write_json_report,
+        write_markdown_report,
+        write_sarif_report,
+    )
     from promptguard.tools.redteam_endpoint import redteam_endpoint
 
-    async def _run() -> None:
+    formats = {f.strip().lower() for f in output_format.split(",") if f.strip()}
+    unknown = formats - {"json", "markdown", "sarif"}
+    if unknown:
+        typer.echo(f"Unknown --format value(s): {', '.join(sorted(unknown))}", err=True)
+        raise typer.Exit(code=1)
+
+    async def _run() -> int:
         target = HTTPAdapter(url, auth_header=auth_header, response_path=response_path)
         judge = None
         engine = None
@@ -216,32 +238,53 @@ def audit(
         finally:
             await target.aclose()
 
-        # Write outputs
-        json_path = write_json_report(report, out_dir / "report.json")
-        md_path = write_markdown_report(report, out_dir / "report.md")
+        # Write requested outputs
+        written: list[str] = []
+        if "json" in formats:
+            written.append(str(write_json_report(report, out_dir / "report.json")))
+        if "markdown" in formats:
+            written.append(str(write_markdown_report(report, out_dir / "report.md")))
+        if "sarif" in formats:
+            written.append(str(write_sarif_report(report, out_dir / "report.sarif")))
 
         # Summary
         s = report.summary
+        scores = (
+            ("LLM01 Prompt Injection", s.owasp_scores.LLM01),
+            ("LLM02 Insecure Output", s.owasp_scores.LLM02),
+            ("LLM06 Sensitive Disclosure", s.owasp_scores.LLM06),
+            ("LLM08 Excessive Agency", s.owasp_scores.LLM08),
+        )
         console.print()
         console.print(f"[bold]Red-team complete[/bold] — {s.total_attacks} attacks")
         table = Table(show_header=True, header_style="bold cyan")
         table.add_column("Category")
         table.add_column("Score", justify="right")
-        for cat, score in (
-            ("LLM01 Prompt Injection", s.owasp_scores.LLM01),
-            ("LLM02 Insecure Output", s.owasp_scores.LLM02),
-            ("LLM06 Sensitive Disclosure", s.owasp_scores.LLM06),
-            ("LLM08 Excessive Agency", s.owasp_scores.LLM08),
-        ):
+        for cat, score in scores:
             colour = "red" if score >= 60 else "yellow" if score >= 30 else "green"
             table.add_row(cat, f"[{colour}]{score}/100[/{colour}]")
         console.print(table)
-        console.print(
-            f"\n[green]✓[/green] JSON report: {json_path}"
-            f"\n[green]✓[/green] Markdown report: {md_path}"
-        )
+        for path_str in written:
+            console.print(f"[green]✓[/green] {path_str}")
 
-    asyncio.run(_run())
+        # CI gate
+        worst = max(score for _, score in scores)
+        if max_score is not None and worst > max_score:
+            offenders = [f"{cat} ({score})" for cat, score in scores if score > max_score]
+            console.print(
+                f"\n[bold red]✗ Gate failed[/bold red]: "
+                f"{', '.join(offenders)} exceed --max-score {max_score}."
+            )
+            return 3
+        if max_score is not None:
+            console.print(
+                f"\n[green]✓ Gate passed[/green]: all categories within --max-score {max_score}."
+            )
+        return 0
+
+    exit_code = asyncio.run(_run())
+    if exit_code != 0:
+        raise typer.Exit(code=exit_code)
 
 
 @app.command()
