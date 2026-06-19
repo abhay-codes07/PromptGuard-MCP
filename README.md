@@ -28,11 +28,12 @@ PromptGuard is that tool — an open-source MCP server you can point at any LLM 
 * ✅ Three-tier classifier (signal → LLM-judge → refusal-heuristic)
 * ✅ **`redteam_endpoint`** — full live red-team orchestration against any HTTP chat endpoint
 * ✅ **Adaptive mutation engine** — uses a meta-LLM to rewrite failed attacks using 7 documented jailbreak techniques
-* ✅ JSON + Markdown report writers
+* ✅ JSON + Markdown + **SARIF** report writers
 * ✅ Working CLI: `version`, `corpus-stats`, `audit-prompt`, `check-input`, `audit <url>`, `serve`
 * ✅ **MCP server (`promptguard serve`)** — exposes 5 tools (`audit_prompt`, `check_injection`,
   `corpus_stats`, `list_attacks`, `redteam_endpoint`) over the Model Context Protocol
-* ✅ 73-test suite — all passing, ruff-clean
+* ✅ **CI-native** — `--max-score` gate (fails the build on regression) + a reusable GitHub Action
+* ✅ 83-test suite — all passing, ruff-clean
 
 **Not yet shipped:**
 
@@ -80,6 +81,35 @@ uv run promptguard audit https://your-llm-app.invalid/chat \
 ```
 
 Reports are written to `./reports/report.json` and `./reports/report.md` by default.
+
+## Use it in CI
+
+PromptGuard's whole pitch is "test before you ship," so it runs as a CI gate. The `audit`
+command takes `--format` (any of `json,markdown,sarif`) and `--max-score`, which **exits
+non-zero (code 3) when any OWASP category score exceeds the threshold** — turning a
+vulnerability regression into a failed build:
+
+```bash
+uv run promptguard audit https://staging.your-app.example/chat \
+  --auth "Bearer $TARGET_TOKEN" \
+  --format json,sarif \
+  --max-score 30        # fail if any category scores > 30/100
+```
+
+A reusable **GitHub Action** ([`action.yml`](action.yml)) wraps this and uploads the SARIF
+report to your repo's Security tab (see [`examples/github_action_workflow.yml`](examples/github_action_workflow.yml)):
+
+```yaml
+- uses: abhay-codes07/PromptGuard-MCP@main
+  with:
+    url: https://staging.your-app.example/chat
+    auth: "Bearer ${{ secrets.TARGET_TOKEN }}"
+    max-score: "30"
+    formats: json,markdown,sarif
+```
+
+SARIF output emits one finding per *successful* attack, with the OWASP category as the rule
+and the attack severity mapped to a code-scanning `security-severity`.
 
 ## Use it as an MCP server
 
@@ -162,7 +192,7 @@ promptguard/
 │   ├── corpus/              # YAML attack corpus + loader
 │   ├── tools/               # audit_prompt, check_injection, redteam_endpoint
 │   ├── engine/              # classifier, mutations, adaptive engine
-│   └── reporting/           # JSON + Markdown renderers
+│   └── reporting/           # JSON + Markdown + SARIF renderers
 └── tests/                   # pytest, mocked HTTP via respx
 ```
 

@@ -3,6 +3,23 @@
 A running log of non-obvious engineering decisions, newest first. One line of
 rationale each — enough to defend the choice against a reasonable alternative.
 
+## 2026-06-20 — CI gate flag is `--max-score`, not the plan's `--fail-under`
+
+NEXT_PLAN sketched a `--fail-under` flag, but PromptGuard scores are *inverted*
+versus coverage: a higher OWASP score means MORE vulnerable, so the build must
+fail when a score is too **high**. `--fail-under` would read backwards. Shipped
+`--max-score N` instead — "the maximum acceptable score; exceed it and the
+audit exits 3." Exit code 3 is distinct from 1 (usage/config errors) and 2 so CI
+can tell a vulnerability-gate failure apart from a tool misconfiguration.
+
+## 2026-06-20 — SARIF emits only successful attacks as results
+
+`render_sarif` skips blocked/uncertain/error outcomes. A SARIF result is a
+finding to act on; surfacing non-vulnerabilities would flood a code-scanning
+dashboard with noise. The full ledger remains in the JSON/Markdown reports. Each
+OWASP category is a SARIF rule; attack severity maps to GitHub's numeric
+`security-severity` so findings bucket correctly into Critical/High/Medium/Low.
+
 ## 2026-06-20 — MCP server uses FastMCP over a hand-rolled protocol loop
 
 `promptguard serve` is built on `mcp.server.fastmcp.FastMCP` (decorator-based

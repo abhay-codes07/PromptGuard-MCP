@@ -1,10 +1,11 @@
 # PromptGuard — Next Plan (v0.1.0 → v1.0)
 
 > Status at time of writing (2026-06-20): Phases 0–5 complete and the MCP server
-> ships (`promptguard serve`, 5 tools). **Workstream A1 below is now DONE** — the
-> corpus has reached 200 prompts (50 per category) with a corpus-quality test gate.
-> 73 tests, ruff-clean. The remaining workstreams are the roadmap for what comes
-> next. **They are a plan, not yet applied.**
+> ships (`promptguard serve`, 5 tools). **Workstreams A1, B1, and B2 below are now
+> DONE** — the corpus has reached 200 prompts (50/category) with a quality gate,
+> the `audit` CLI is CI-native (`--max-score` gate + SARIF output), and a reusable
+> GitHub Action ships. 83 tests, ruff-clean. The remaining workstreams are the
+> roadmap for what comes next. **They are a plan, not yet applied.**
 
 The goal of this plan is to take PromptGuard from "working alpha that an early
 adopter can clone" to "the obvious tool you reach for to red-team an LLM app,
@@ -52,20 +53,22 @@ is `pip install`-able and the corpus is credible.
 
 PromptGuard's pitch is "test before you ship." That only lands if it runs in CI.
 
-**B1. A `promptguard` GitHub Action.**
-- A composite/Docker action wrapping `promptguard audit <url>` with inputs for
-  target, auth (from secrets), categories, and a `--fail-under` threshold.
-- Add `--fail-under <score>` to the `audit` CLI command: exit non-zero when any
-  OWASP category score exceeds the threshold, so a regression fails the build.
-  Touches `src/promptguard/cli.py` and a new `exit-code` policy.
-- *Done-bar:* a sample workflow in `examples/` red-teams a target and fails on
-  regression.
+**B1. A `promptguard` GitHub Action. ✅ DONE (2026-06-20).**
+- Shipped a composite `action.yml` wrapping `promptguard audit <url>` with inputs
+  for target, auth (from secrets), formats, concurrency, and the score gate, plus
+  SARIF upload and report-artifact steps. Example consumer workflow in
+  `examples/github_action_workflow.yml`.
+- Added `--max-score <score>` to the `audit` CLI (renamed from the plan's
+  `--fail-under` — see DECISIONS): exits code 3 when any OWASP category score
+  exceeds the threshold, so a regression fails the build.
+- *Done:* CLI gate + Action present; covered by `test_cli.py` gate tests.
 
-**B2. SARIF output.**
-- Add `src/promptguard/reporting/sarif_report.py` so results upload to GitHub
-  Code Scanning (each successful attack → a SARIF result with rule = OWASP id).
-- Wire `--format sarif` into the `audit` command and the Action.
-- *Done-bar:* findings appear in a repo's Security tab.
+**B2. SARIF output. ✅ DONE (2026-06-20).**
+- Added `src/promptguard/reporting/sarif_report.py` (SARIF 2.1.0; one rule per
+  OWASP category, one result per *successful* attack, severity → code-scanning
+  `security-severity`). Wired `--format sarif` into the `audit` command and the
+  Action's `upload-sarif` step.
+- *Done:* `test_sarif.py` green; Action uploads `report.sarif` to code scanning.
 
 **B3. Regression baselines.**
 - `promptguard audit ... --baseline prev.json` diffs the current run against a
@@ -147,11 +150,11 @@ Raise the ceiling on what PromptGuard can actually find.
 
 ## Recommended sequencing
 
-1. **Workstream A (ship v0.1.0)** — corpus to 200 + PyPI + demo. Unblocks adoption.
-2. **B1 + B2 (CI Action + SARIF)** — the differentiated "test before you ship" story.
-3. **E1 + E3 (resilience + eval harness)** — credibility for real targets.
+1. ~~**Workstream A1 (corpus to 200)**~~ — ✅ done. (A2 PyPI + A3 demo still open.)
+2. ~~**B1 + B2 (CI Action + SARIF)**~~ — ✅ done.
+3. **E1 + E3 (resilience + eval harness)** — credibility for real targets. ← next
 4. **C1 (multi-turn)** — the biggest single jump in attack power.
-5. Remaining items (C2/C3, D*, B3, E2) as pull-driven by user demand.
+5. Remaining items (A2/A3, C2/C3, D*, B3, E2) as pull-driven by user demand.
 
 ## Guardrails carried forward
 
